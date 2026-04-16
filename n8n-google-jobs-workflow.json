@@ -1,0 +1,216 @@
+{
+  "name": "Global Internet Tech Jobs Scanner (India)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "e6f47738-f1f3-4fd7-9f79-22db4c8bc45b",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        200,
+        300
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "url": "https://serpapi.com/search.json",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "engine",
+              "value": "google_jobs"
+            },
+            {
+              "name": "q",
+              "value": "software engineer fresher India OR entry level developer India"
+            },
+            {
+              "name": "location",
+              "value": "India"
+            },
+            {
+              "name": "chips",
+              "value": "date_posted:today"
+            },
+            {
+              "name": "api_key",
+              "value": "835fe0af1165604281788b6f663da06099df7011"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "http-serpapi-jobs",
+      "name": "Google Jobs (SerpApi)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all()[0].json.jobs_results || [];\n\nconst newItems = [];\nfor (const job of jobs) {\n  let title = job.title || 'Unknown Title';\n  let company = job.company_name || 'Unknown Company';\n  let location = job.location || 'India';\n  let pubDate = job.detected_extensions?.posted_at || 'Today';\n  \n  // Dig for an apply link natively found by Google\n  let link = '';\n  if (job.apply_options && job.apply_options.length > 0) {\n    link = job.apply_options[0].link;\n  } else if (job.share_link) {\n    link = job.share_link;\n  }\n\n  const titleLower = title.toLowerCase();\n  \n  // Exclude unwanted levels\n  const hasExcluded = [\"intern\", \"internship\", \"training\", \"unpaid\", \"senior\", \"lead\"].some(kw => titleLower.includes(kw));\n  if (hasExcluded) continue;\n\n  // Simple Ranking Algorithm\n  let score = 0;\n  if (titleLower.includes(\"fresher\") || titleLower.includes(\"entry level\") || titleLower.includes(\"junior\")) score += 10;\n  if (titleLower.includes(\"react\") || titleLower.includes(\"backend\") || titleLower.includes(\"node\")) score += 5;\n  \n  newItems.push({\n    json: {\n      title, \n      company, \n      location, \n      link, \n      pubDate, \n      relevanceScore: score\n    }\n  });\n}\n\n// Sort by most relevant\nnewItems.sort((a, b) => b.json.relevanceScore - a.json.relevanceScore);\nreturn newItems;"
+      },
+      "id": "code-standardize-jobs",
+      "name": "Extract & Rank Jobs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeDuplicates",
+        "compare": "custom",
+        "fieldsToCompare": {
+          "fields": [
+            {
+              "fieldName": "link"
+            }
+          ]
+        }
+      },
+      "id": "2787fc5f-a78b-4bf1-a8ca-df2f146fde08",
+      "name": "Remove Duplicates",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 2.1,
+      "position": [
+        860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "limit",
+        "maxItems": 20
+      },
+      "id": "8907fc5f-a78b-4bf1-a8ca-df2f146fde09",
+      "name": "Top 20 Jobs",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 2.1,
+      "position": [
+        1080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const jobs = $input.all().map(i => i.json);\n\nif (jobs.length === 0) {\n  return [{ json: { subject: \"Daily Entry-Level Tech Jobs (0)\", htmlContent: \"<p>No new entry-level jobs found today across the web based on the criteria.</p>\" } }];\n}\n\nlet html = `\n<div style=\"font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #1a1a1a; max-width: 600px; margin: 0 auto;\">\n  <div style=\"background: linear-gradient(135deg, #0056b3, #003d82); padding: 20px; border-radius: 8px 8px 0 0;\">\n    <h2 style=\"color: #ffffff; margin: 0; font-size: 24px;\">🌐 Global Tech Jobs Scan</h2>\n    <p style=\"color: #e0e0e0; margin: 5px 0 0 0; font-size: 14px;\">Fresh Entry-Level Roles in India</p>\n  </div>\n  \n  <div style=\"padding: 20px; background-color: #ffffff; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 8px 8px;\">\n    <p style=\"font-size: 16px; margin-bottom: 20px;\">Here are the top ${jobs.length} jobs scraped from Google Jobs in the last 24 hours:</p>\n`;\n\nfor (const job of jobs) {\n  html += `\n    <div style=\"margin-bottom: 15px; padding: 15px; background-color: #f8f9fa; border-radius: 6px; border-left: 4px solid #0056b3; transition: transform 0.2s;\">\n      <h3 style=\"margin: 0 0 8px 0; color: #2c3e50; font-size: 18px;\">${job.title}</h3>\n      <div style=\"color: #555; font-size: 14px; margin-bottom: 12px;\">\n        <p style=\"margin: 4px 0;\"><span style=\"font-weight: 600; color: #333;\">🏢 Company:</span> ${job.company}</p>\n        <p style=\"margin: 4px 0;\"><span style=\"font-weight: 600; color: #333;\">📍 Location:</span> ${job.location}</p>\n        <p style=\"margin: 4px 0;\"><span style=\"font-weight: 600; color: #333;\">⏳ Posted:</span> ${job.pubDate}</p>\n        <p style=\"margin: 4px 0;\"><span style=\"font-weight: 600; color: #333;\">⭐ Relevance Score:</span> ${job.relevanceScore}</p>\n      </div>\n      <a href=\"${job.link}\" style=\"display: inline-block; padding: 8px 16px; background-color: #0056b3; color: #ffffff; text-decoration: none; border-radius: 4px; font-weight: 600; font-size: 14px;\">Apply Now</a>\n    </div>\n  `;\n}\n\nhtml += `\n    <p style=\"font-size: 12px; color: #888; text-align: center; margin-top: 30px;\">Automated by n8n • Powered by Google Jobs</p>\n  </div>\n</div>\n`;\n\nreturn [{ json: { subject: `🎯 Daily Entry-Level Tech Jobs (${jobs.length})`, htmlContent: html } }];"
+      },
+      "id": "eb0a0ad1-3e42-4dc2-805c-37fe1dbdfec5",
+      "name": "Format Email HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "sendTo": "your.email@example.com",
+        "subject": "={{$json.subject}}",
+        "emailType": "html",
+        "htmlMessage": "={{$json.htmlContent}}"
+      },
+      "id": "e81d898a-f5b2-4d56-a1ec-d7ecaf1a42b1",
+      "name": "Send Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Google Jobs (SerpApi)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Jobs (SerpApi)": {
+      "main": [
+        [
+          {
+            "node": "Extract & Rank Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Rank Jobs": {
+      "main": [
+        [
+          {
+            "node": "Remove Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Remove Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Top 20 Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Top 20 Jobs": {
+      "main": [
+        [
+          {
+            "node": "Format Email HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "timezone": "Asia/Kolkata",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  }
+}
