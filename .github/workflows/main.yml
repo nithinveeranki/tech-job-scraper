@@ -1,0 +1,32 @@
+name: Daily Tech Job Scraper
+
+# Schedule the workflow to run every day
+on:
+  schedule:
+    # 03:30 UTC is exactly 09:00 AM IST
+    - cron: '30 3 * * *'
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  scrape-and-email:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Install Dependencies
+      run: npm install
+      
+    - name: Run Web Scraper Engine
+      run: npm start
+      env:
+        SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
