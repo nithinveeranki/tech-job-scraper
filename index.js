@@ -8,6 +8,24 @@ const SERPAPI_KEY = process.env.SERPAPI_KEY;
 const EMAIL_USER  = process.env.EMAIL_USER;
 const EMAIL_PASS  = process.env.EMAIL_PASS;
 
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeUrl(value = '') {
+  try {
+    const u = new URL(String(value));
+    return (u.protocol === 'https:' || u.protocol === 'http:') ? u.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // PHASE 1 — Multi-Threaded Parallel Query Engine (12 searches)
 // Covers React, Node, Python, Full Stack, AI/ML, RAG, LLM,
@@ -108,6 +126,7 @@ function processJobs(rawJobs) {
     let link = '';
     if (job.apply_options?.length > 0) link = job.apply_options[0].link;
     else if (job.share_link)           link = job.share_link;
+    link = sanitizeUrl(link);
     if (!link) continue;
 
     // Deduplicate by canonical URL + Title×Company combo
@@ -166,19 +185,24 @@ function buildEmailHTML(jobs) {
   const generalJobs = jobs.filter(j => j.relevanceScore <  10 && !j.isAI);
 
   const renderCard = (job) => {
+    const safeTitle = escapeHtml(job.title);
+    const safeCompany = escapeHtml(job.company);
+    const safeLocation = escapeHtml(job.location);
+    const safePubDate = escapeHtml(job.pubDate);
+    const safeLink = sanitizeUrl(job.link);
     const badgeHTML = job.badges.length
-      ? job.badges.map(b => `<span style="display:inline-block;padding:3px 10px;margin:2px 2px 2px 0;background:#e8f0fe;color:#1a73e8;border-radius:12px;font-size:11px;font-weight:700;">${b}</span>`).join('')
+      ? job.badges.map(b => `<span style="display:inline-block;padding:3px 10px;margin:2px 2px 2px 0;background:#e8f0fe;color:#1a73e8;border-radius:12px;font-size:11px;font-weight:700;">${escapeHtml(b)}</span>`).join('')
       : `<span style="font-size:12px;color:#aaa;">General Tech</span>`;
 
     return `<div style="margin-bottom:16px;padding:18px;background:#fff;border-radius:10px;border:1px solid #e0e0e0;border-left:5px solid #1a73e8;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-      <h3 style="margin:0 0 6px 0;font-size:16px;color:#1a1a2e;">${job.title}</h3>
+      <h3 style="margin:0 0 6px 0;font-size:16px;color:#1a1a2e;">${safeTitle}</h3>
       <p style="margin:4px 0;font-size:13px;color:#555;">
-        🏢 <strong>${job.company}</strong> &nbsp;·&nbsp;
-        📍 ${job.location} &nbsp;·&nbsp;
-        ⏳ ${job.pubDate}
+        🏢 <strong>${safeCompany}</strong> &nbsp;·&nbsp;
+        📍 ${safeLocation} &nbsp;·&nbsp;
+        ⏳ ${safePubDate}
       </p>
       <div style="margin:10px 0 12px 0;">${badgeHTML}</div>
-      <a href="${job.link}" style="display:inline-block;padding:9px 20px;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;text-decoration:none;border-radius:20px;font-size:13px;font-weight:700;letter-spacing:0.3px;">Apply Now →</a>
+      <a href="${safeLink || '#'}" style="display:inline-block;padding:9px 20px;background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;text-decoration:none;border-radius:20px;font-size:13px;font-weight:700;letter-spacing:0.3px;">Apply Now →</a>
     </div>`;
   };
 
